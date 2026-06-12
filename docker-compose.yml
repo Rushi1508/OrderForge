@@ -1,0 +1,52 @@
+name: orderforge
+
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - "--mode=dev-container"          # lean single-node dev mode
+      - "--smp=1"                        # 1 CPU core — keeps RAM down
+      - "--kafka-addr=PLAINTEXT://0.0.0.0:9092"
+      - "--advertise-kafka-addr=PLAINTEXT://localhost:9092"
+    ports:
+      - "9092:9092"   # Kafka API
+      - "9644:9644"   # Admin API
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: orderforge
+      POSTGRES_PASSWORD: orderforge
+      POSTGRES_DB: orderforge
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orderforge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
