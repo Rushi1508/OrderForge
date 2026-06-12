@@ -7,6 +7,8 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -33,6 +35,14 @@ public class Order {
 
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItem> items = new ArrayList<>();
+
+    public void addItem(OrderItem item) {
+        items.add(item);
+        item.setOrder(this);
+    }
 
     @PrePersist
     protected void onCreate() {

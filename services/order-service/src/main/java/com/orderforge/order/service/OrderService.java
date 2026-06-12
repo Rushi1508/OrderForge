@@ -29,17 +29,27 @@ public class OrderService {
         Order order = new Order();
         order.setCustomerId(req.getCustomerId());
         order.setTotalAmount(req.getTotalAmount());
+
+        req.getItems().forEach(i ->
+            order.addItem(new com.orderforge.order.domain.OrderItem(i.getSku(), i.getQuantity())));
+
         Order saved = orderRepository.save(order);
+
+        var eventItems = saved.getItems().stream()
+            .map(i -> new com.orderforge.events.OrderItem(i.getSku(), i.getQuantity()))
+            .toList();
 
         kafkaTemplate.send("order-created", saved.getId().toString(),
             new OrderCreatedEvent(
                 saved.getId(),
                 saved.getCustomerId(),
                 saved.getTotalAmount(),
+                eventItems,
                 saved.getCreatedAt()
             ));
 
-        log.info("Order {} created, OrderCreatedEvent published", saved.getId());
+        log.info("Order {} created with {} items, OrderCreatedEvent published",
+                saved.getId(), eventItems.size());
         return toResponse(saved);
     }
 
