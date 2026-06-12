@@ -1,0 +1,8 @@
+target/
+build/
+*.jar
+.idea/
+*.iml
+.vscode/
+.DS_Store
+.env
