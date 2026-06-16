@@ -1,0 +1,41 @@
+package com.orderforge.inventory;
+
+import com.orderforge.events.OrderCreatedEvent;
+import com.orderforge.events.OrderItem;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class InventoryService {
+
+    private final StockRepository stockRepository;
+
+    @Transactional
+    public boolean reserve(OrderCreatedEvent event) {
+        // First pass: check every item has enough stock
+        for (OrderItem item : event.items()) {
+            Stock stock = stockRepository.findById(item.sku()).orElse(null);
+            if (stock == null || stock.getAvailable() < item.quantity()) {
+                log.warn("Reservation FAILED for order {}: insufficient stock for sku={} (need {}, have {})",
+                        event.orderId(), item.sku(), item.quantity(),
+                        stock == null ? 0 : stock.getAvailable());
+                return false;
+            }
+        }
+
+        // Second pass: deduct (safe now that all checks passed)
+        for (OrderItem item : event.items()) {
+            Stock stock = stockRepository.findById(item.sku()).orElseThrow();
+            stock.setAvailable(stock.getAvailable() - item.quantity());
+            stockRepository.save(stock);
+        }
+
+        log.info("Reservation SUCCESS for order {}: {} items reserved",
+                event.orderId(), event.items().size());
+        return true;
+    }
+}
