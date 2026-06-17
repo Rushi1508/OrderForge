@@ -1,6 +1,8 @@
 package com.orderforge.inventory;
 
 import com.orderforge.events.InventoryReservedEvent;
+import com.orderforge.events.InventoryReservationFailedEvent;
+import com.orderforge.events.ReleaseInventoryCommand;
 import com.orderforge.events.OrderCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +35,21 @@ public class OrderEventConsumer {
             kafkaTemplate.send("inventory-reserved", event.orderId().toString(), reservedEvent);
             log.info("Published InventoryReservedEvent for order {}", event.orderId());
         }
-        // Failure path (publish InventoryReservationFailed) comes in Phase 3
+        else {
+            InventoryReservationFailedEvent failedEvent = new InventoryReservationFailedEvent(
+                    event.orderId(),
+                    "Insufficient stock",
+                    LocalDateTime.now());
+            kafkaTemplate.send("inventory-reservation-failed", event.orderId().toString(), failedEvent);
+            log.warn("Published InventoryReservationFailedEvent for order {}", event.orderId());
+        }
     }
+
+    @KafkaListener(topics = "release-inventory", groupId = "inventory-service")
+    public void onReleaseInventory(ReleaseInventoryCommand command) {
+        log.warn("Received ReleaseInventoryCommand for order {} ({} items)",
+                command.orderId(), command.items().size());
+        inventoryService.release(command.orderId(), command.items());
+    }
+
 }

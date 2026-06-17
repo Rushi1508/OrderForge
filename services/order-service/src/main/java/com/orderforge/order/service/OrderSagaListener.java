@@ -1,6 +1,12 @@
 package com.orderforge.order.service;
 
 import com.orderforge.events.InventoryReservedEvent;
+import com.orderforge.events.InventoryReservationFailedEvent;
+import com.orderforge.events.PaymentDeclinedEvent;
+import com.orderforge.events.ReleaseInventoryCommand;
+import com.orderforge.events.OrderItem;
+import com.orderforge.order.domain.Order;
+import java.util.List;
 import com.orderforge.events.PaymentProcessedEvent;
 import com.orderforge.events.ProcessPaymentCommand;
 import com.orderforge.order.domain.Order;
@@ -49,6 +55,43 @@ public class OrderSagaListener {
                 event.orderId(), event.paymentId());
 
         orderService.confirmOrder(event.orderId());
-        log.info("Order {} marked CONFIRMED — saga complete", event.orderId());
+        log.info("Order {} marked CONFIRMED - saga complete", event.orderId());
+    }
+
+    @KafkaListener(topics = "inventory-reservation-failed", groupId = "order-service")
+    public void onReservationFailed(InventoryReservationFailedEvent event) {
+        log.warn("Received InventoryReservationFailedEvent for order {}: {}",
+                event.orderId(), event.reason());
+        orderService.cancelOrder(event.orderId());
+        log.warn("Order {} marked CANCELLED - reservation failed", event.orderId());
+    }
+
+    @KafkaListener(topics = "payment-declined", groupId = "order-service")
+    @org.springframework.transaction.annotation.Transactional
+    public void onPaymentDeclined(PaymentDeclinedEvent event) {
+        log.warn("Received PaymentDeclinedEvent for order {}: {}",
+                event.orderId(), event.reason());
+
+        Order order = orderRepository.findById(event.orderId()).orElse(null);
+        if (order == null) {
+            log.warn("Order {} not found; cannot compensate", event.orderId());
+            return;
+        }
+
+        // Map persisted line items -> event items for the release command
+        List<OrderItem> itemsToRelease = order.getItems().stream()
+                .map(i -> new OrderItem(i.getSku(), i.getQuantity()))
+                .toList();
+
+        ReleaseInventoryCommand release = new ReleaseInventoryCommand(
+                event.orderId(),
+                itemsToRelease,
+                LocalDateTime.now());
+        kafkaTemplate.send("release-inventory", event.orderId().toString(), release);
+        log.warn("Published ReleaseInventoryCommand for order {} ({} items)",
+                event.orderId(), itemsToRelease.size());
+
+        orderService.cancelOrder(event.orderId());
+        log.warn("Order {} marked CANCELLED - payment declined", event.orderId());
     }
 }

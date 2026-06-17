@@ -38,4 +38,18 @@ public class InventoryService {
                 event.orderId(), event.items().size());
         return true;
     }
+    @Transactional
+    public void release(java.util.UUID orderId, java.util.List<OrderItem> items) {
+        for (OrderItem item : items) {
+            Stock stock = stockRepository.findById(item.sku()).orElse(null);
+            if (stock == null) {
+                log.warn("Cannot release sku={} for order {}: stock row not found",
+                        item.sku(), orderId);
+                continue;
+            }
+            stock.setAvailable(stock.getAvailable() + item.quantity());
+            stockRepository.save(stock);
+        }
+        log.info("Released stock for order {}: {} items returned", orderId, items.size());
+    }
 }
