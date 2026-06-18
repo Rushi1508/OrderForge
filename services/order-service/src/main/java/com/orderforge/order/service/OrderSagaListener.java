@@ -5,8 +5,6 @@ import com.orderforge.events.InventoryReservationFailedEvent;
 import com.orderforge.events.PaymentDeclinedEvent;
 import com.orderforge.events.ReleaseInventoryCommand;
 import com.orderforge.events.OrderItem;
-import com.orderforge.order.domain.Order;
-import java.util.List;
 import com.orderforge.events.PaymentProcessedEvent;
 import com.orderforge.events.ProcessPaymentCommand;
 import com.orderforge.order.domain.Order;
@@ -18,6 +16,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -39,6 +39,7 @@ public class OrderSagaListener {
         }
 
         ProcessPaymentCommand command = new ProcessPaymentCommand(
+                UUID.randomUUID(),
                 order.getId(),
                 order.getCustomerId(),
                 order.getTotalAmount(),
@@ -84,6 +85,7 @@ public class OrderSagaListener {
                 .toList();
 
         ReleaseInventoryCommand release = new ReleaseInventoryCommand(
+                UUID.randomUUID(),
                 event.orderId(),
                 itemsToRelease,
                 LocalDateTime.now());
