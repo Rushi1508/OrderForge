@@ -1,5 +1,7 @@
 package com.orderforge.inventory;
 
+import com.orderforge.events.InventoryReservedEvent;
+import com.orderforge.events.InventoryReservationFailedEvent;
 import com.orderforge.events.OrderCreatedEvent;
 import com.orderforge.events.OrderItem;
 import lombok.RequiredArgsConstructor;
@@ -7,21 +9,60 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
 
     private final StockRepository stockRepository;
+    private final OutboxService outboxService;
 
     @Transactional
-    public boolean reserve(OrderCreatedEvent event) {
+    public void reserve(OrderCreatedEvent event) {
+        boolean ok = tryReserve(event);
+
+        if (ok) {
+            InventoryReservedEvent reservedEvent = new InventoryReservedEvent(
+                    UUID.randomUUID(),
+                    event.orderId(),
+                    event.items(),
+                    LocalDateTime.now());
+            outboxService.stage(
+                    "Order",
+                    event.orderId().toString(),
+                    "InventoryReservedEvent",
+                    "inventory-reserved",
+                    "com.orderforge.events.InventoryReservedEvent",
+                    reservedEvent);
+            log.info("Reservation SUCCESS for order {}: {} items reserved",
+                    event.orderId(), event.items().size());
+        } else {
+            InventoryReservationFailedEvent failedEvent = new InventoryReservationFailedEvent(
+                    UUID.randomUUID(),
+                    event.orderId(),
+                    "Insufficient stock",
+                    LocalDateTime.now());
+            outboxService.stage(
+                    "Order",
+                    event.orderId().toString(),
+                    "InventoryReservationFailedEvent",
+                    "inventory-reservation-failed",
+                    "com.orderforge.events.InventoryReservationFailedEvent",
+                    failedEvent);
+            log.warn("Reservation FAILED for order {}: insufficient stock", event.orderId());
+        }
+    }
+
+    private boolean tryReserve(OrderCreatedEvent event) {
         // First pass: check every item has enough stock
         for (OrderItem item : event.items()) {
             Stock stock = stockRepository.findById(item.sku()).orElse(null);
             if (stock == null || stock.getAvailable() < item.quantity()) {
-                log.warn("Reservation FAILED for order {}: insufficient stock for sku={} (need {}, have {})",
-                        event.orderId(), item.sku(), item.quantity(),
+                log.warn("Insufficient stock for sku={} (need {}, have {})",
+                        item.sku(), item.quantity(),
                         stock == null ? 0 : stock.getAvailable());
                 return false;
             }
@@ -33,11 +74,9 @@ public class InventoryService {
             stock.setAvailable(stock.getAvailable() - item.quantity());
             stockRepository.save(stock);
         }
-
-        log.info("Reservation SUCCESS for order {}: {} items reserved",
-                event.orderId(), event.items().size());
         return true;
     }
+
     @Transactional
     public void release(java.util.UUID orderId, java.util.List<OrderItem> items) {
         for (OrderItem item : items) {
