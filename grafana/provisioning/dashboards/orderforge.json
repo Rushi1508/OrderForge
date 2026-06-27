@@ -1,0 +1,74 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "title": "OrderForge Saga Metrics",
+  "uid": "orderforge-saga",
+  "schemaVersion": 39,
+  "tags": ["orderforge"],
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Heap used per service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (application) (jvm_memory_used_bytes{area=\"heap\"})",
+          "legendFormat": "{{application}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "JVM live threads",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "jvm_threads_live_threads",
+          "legendFormat": "{{application}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Kafka records consumed/sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (application) (rate(kafka_consumer_fetch_manager_records_consumed_total[1m]))",
+          "legendFormat": "{{application}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "HTTP request rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (application, uri) (rate(http_server_requests_seconds_count[1m]))",
+          "legendFormat": "{{application}} {{uri}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

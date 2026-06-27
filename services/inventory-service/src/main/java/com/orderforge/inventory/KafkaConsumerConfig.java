@@ -1,5 +1,6 @@
 package com.orderforge.inventory;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -13,6 +14,7 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.core.MicrometerConsumerListener;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
@@ -27,9 +29,11 @@ import java.util.Map;
 public class KafkaConsumerConfig {
 
     private final JsonMapper jsonMapper;
+    private final MeterRegistry meterRegistry;
 
-    public KafkaConsumerConfig(JsonMapper jsonMapper) {
+    public KafkaConsumerConfig(JsonMapper jsonMapper, MeterRegistry meterRegistry) {
         this.jsonMapper = jsonMapper;
+        this.meterRegistry = meterRegistry;
     }
 
     @Bean
@@ -47,10 +51,13 @@ public class KafkaConsumerConfig {
         ErrorHandlingDeserializer<Object> valueDeserializer =
                 new ErrorHandlingDeserializer<>(delegate);
 
-        return new DefaultKafkaConsumerFactory<>(
-                config,
-                new StringDeserializer(),
-                valueDeserializer);
+        DefaultKafkaConsumerFactory<String, Object> factory =
+                new DefaultKafkaConsumerFactory<>(
+                        config,
+                        new StringDeserializer(),
+                        valueDeserializer);
+        factory.addListener(new MicrometerConsumerListener<>(meterRegistry));
+        return factory;
     }
 
     // DLT producer: key stays String (orderId), value is raw bytes of the
